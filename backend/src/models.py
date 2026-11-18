@@ -43,6 +43,12 @@ class Layout(Base):
     evidence:Mapped[dict|None]=mapped_column(JSON,nullable=True)
     source_checksum:Mapped[str|None]=mapped_column(String(64),nullable=True)
     signed_by:Mapped[str|None]=mapped_column(String(100),nullable=True)
+    # 计算执行栅栏：attempt为栅栏令牌，只有当前attempt的执行者可发布；phase/note/stamp供页面查看等待、接管、补文件与完成原因
+    compute_attempt:Mapped[int]=mapped_column(Integer,default=0)
+    compute_phase:Mapped[str|None]=mapped_column(String(20),nullable=True)
+    compute_note:Mapped[str|None]=mapped_column(String(200),nullable=True)
+    compute_owner:Mapped[str|None]=mapped_column(String(60),nullable=True)
+    compute_stamp:Mapped[str|None]=mapped_column(String(40),nullable=True)
 class LayoutProbe(Base):
     __tablename__='layout_probes'
     id:Mapped[int]=mapped_column(primary_key=True)

@@ -1,6 +1,7 @@
 ROLES=('admin','engineer','viewer')
 ZONES=('root','mid','tip')
 LAYOUT_STATES=('calculating','ready','signed','invalidated','failed')
+COMPUTE_PHASES=('queued','running','taken_over','finalizing','repairing')
 
 CERTIFICATE_STATES=('draft','issued')
 RUN_STATES=('planned','running','completed')

@@ -62,13 +62,19 @@ Pressure与LayoutProbe是真实关系表，JSON只保存衍生计算证据。wor
 
 五服务frontend/backend/worker/db/redis，全部健康检查。MySQL用TCP127.0.0.1业务账号SELECT1保证初始化完成；worker有心跳；Nginx/api去掉前缀代理。显式10.221.28.0/24子网可在.env调整；端口、COMPOSE_PROJECT_NAME、JWT_SECRET、SEED_DEMO见.env.example。数据库/Redis/共享产物分别命名卷。
 
-`backend/src/models.py`领域表与双关联；`schemas.py`输入；`services.py`约束、来源失效和SHA；`selection.py`无泄漏选择/验证；`worker.py`队列；`main.py`权限路由；`auth.py`JWT；`middlewares.py`请求ID与限流。seed按自然键仅补缺失，不改用户资料。
+`backend/src/models.py`领域表与双关联；`schemas.py`输入；`services.py`约束、来源失效和SHA；`selection.py`无泄漏选择/验证；`worker.py`队列、接管与补文件；`main.py`权限路由；`auth.py`JWT；`middlewares.py`请求ID与限流。seed按自然键仅补缺失，不改用户资料。
 
 `frontend/src/pages/probes.js`定位/标定、`sweeps.js`带12压力表单、`ranking.js`预算/贡献、`review.js`逐翼段选点/审签。`api.js`HTTP、`store.js`状态、`components/instruments.js`翼面图/状态/选择器、`utils/format.js`转义/数字/表单。角色、翼段、布局状态在backend/src/constants.py和frontend/src/constants.js；schemas.py含翼段Literal，selection.py使用实际ID关系。权限后端执行；IntegrityError转可恢复409。
 
 本地安装backend/requirements.txt，设置DATABASE_URL/REDIS_URL，backend目录运行`uvicorn src.main:app --reload`，另一终端`python -m src.worker`；前端建议保留Compose Nginx代理。停止`docker compose down`，清数据`down -v --remove-orphans`。
 
-已知范围：单翼模12测点、随机留出按独立扫角假设，实际时序漂移场景应按试验批次验证；签后整套来源冻结，没有多版本重开、撤签或采集硬件接口。worker崩溃作业自动重投未实现。Google字体离线回退。验收脚本/日志/截图在`../../test-artifacts/gb-1028/`。
+已知范围：单翼模12测点、随机留出按独立扫角假设，实际时序漂移场景应按试验批次验证；签后整套来源冻结，没有多版本重开、撤签或采集硬件接口。Google字体离线回退。验收脚本/日志/截图在`../../test-artifacts/gb-1028/`。
+
+## 计算恢复与一致性
+
+计算任务带`compute_attempt`栅栏令牌与执行阶段（queued等待/running计算/taken_over接管/finalizing写文件/repairing补文件），阶段与原因随`/layouts`下发，互信息排序页与布置审签页可见。worker认领任务后持有按attempt隔离的Redis租约并心跳续期；出队后崩溃、进程中断或队列消息丢失时，巡检在宽限后自动接管：递增attempt重新入队，重复消息按attempt去重，不漏算也不多发。入库、置ready/failed等全部发布都带attempt条件更新，接管之后旧执行者迟回的成功或失败直接落空，只有当前执行者可发布。
+
+计算结果先入库（选点、证据、来源SHA同一事务提交），再原子写`/artifacts/layout-<id>.json`；文件写失败或此时中断，接管方按库内同一次计算的证据补写文件，不新增计算、不改选点。数据库证据、实际选点与计算文件三者一致后布置才进入ready可审签；已签布置不参与接管与补写，保持原样。瞬时数据库故障不判失败，留待接管重算；业务校验失败（如扫角不足40组）仍置failed并记录原因。既有库启动时按information_schema补列，新库由create_all直接建出。
 
 ## 校准与开车扩展
 

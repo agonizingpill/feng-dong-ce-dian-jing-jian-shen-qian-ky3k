@@ -17,7 +17,18 @@ def audit(s,u,action):s.add(Audit(actor=u.email,action=action,stamp=datetime.now
 def invalidate(s):
     if s.scalar(select(Layout.id).where(Layout.status=='signed')):raise HTTPException(409,'已有审签布置，标定与扫角来源已冻结')
     if s.scalar(select(Layout.id).where(Layout.status=='calculating')):raise HTTPException(409,'贡献计算进行中，来源暂不能修改')
-    for l in s.scalars(select(Layout).where(Layout.status.in_(['ready','failed']))):l.status='invalidated';l.evidence=None;l.source_checksum=None
+    for l in s.scalars(select(Layout).where(Layout.status.in_(['ready','failed']))):l.status='invalidated';l.evidence=None;l.source_checksum=None;l.compute_phase=None;l.compute_note='来源已变更，需重新计算'
+
+def enqueue_compute(s,r,l,note):
+    # 每次入队递增attempt栅栏令牌并清空旧证据；worker崩溃或消息丢失由巡检接管重投
+    l.status='calculating';l.evidence=None;l.source_checksum=None
+    l.compute_attempt=(l.compute_attempt or 0)+1;l.compute_phase='queued';l.compute_owner=None
+    l.compute_note=f'{note}（第{l.compute_attempt}次执行）';l.compute_stamp=datetime.now(timezone.utc).isoformat()
+    s.commit()
+    try:r.rpush('tunnel-selection',json.dumps({'id':l.id,'attempt':l.compute_attempt}))
+    except Exception:
+        l.status='failed';l.compute_phase=None;l.compute_note='计算队列暂不可用，请重试';s.commit()
+        raise HTTPException(503,'计算队列暂不可用，请重试')
 
 def assign(s,l,ids):
     if len(ids)!=len(set(ids)):raise HTTPException(409,'测点不能重复占用通道')
